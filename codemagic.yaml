@@ -1,11 +1,21 @@
 workflows:
-  android-only:
-    name: Android APK
+  android-build:
+    name: Build Android APK
     instance_type: mac_mini_m2
     environment:
       flutter: stable
     scripts:
-      - flutter pub get
-      - flutter build apk --release
+      - name: Create a new Flutter project with Android platform
+        script: flutter create --platforms=android --org com.example --project-name luxury_editor temp_project
+      - name: Copy your existing code into the new project
+        script: |
+          rm -rf temp_project/lib
+          cp -r lib temp_project/
+          cp pubspec.yaml temp_project/
+      - name: Build APK
+        script: |
+          cd temp_project
+          flutter pub get
+          flutter build apk --release
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+      - temp_project/build/app/outputs/flutter-apk/*.apk
