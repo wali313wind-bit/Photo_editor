@@ -3,11 +3,9 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 void main() {
   runApp(const MyApp());
@@ -23,11 +21,6 @@ class MyApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         primaryColor: Colors.amber,
         scaffoldBackgroundColor: const Color(0xFF1E1E2F),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-        ),
       ),
       debugShowCheckedModeBanner: false,
       home: const ImageEditorScreen(),
@@ -43,148 +36,55 @@ class ImageEditorScreen extends StatefulWidget {
 }
 
 class _ImageEditorScreenState extends State<ImageEditorScreen> {
-  File? _imageFile;
-  ui.Image? _originalImage;
   ui.Image? _editedImage;
-
-  double _brightness = 0.0;
-  double _contrast = 0.0;
-  double _saturation = 0.0;
-  double _exposure = 0.0;
-
   String _selectedFilter = 'none';
-
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    _loadDefaultImage();
+    _pickImageFromGallery(); // مستقیماً از گالری بخواهد عکس انتخاب کند
   }
 
-  Future<void> _loadDefaultImage() async {
-    try {
-      final ByteData data = await rootBundle.load('assets/default_image.png');
-      final Uint8List bytes = data.buffer.asUint8List();
-      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
-      final ui.FrameInfo frameInfo = await codec.getNextFrame();
-      setState(() {
-        _originalImage = frameInfo.image;
-        _editedImage = frameInfo.image;
-      });
-    } catch (e) {
-      debugPrint('خطا در بارگذاری عکس پیش‌فرض: $e');
-    }
-  }
-
-  Future<void> _pickImage() async {
-    final XFile? pickedFile =
-        await _picker.pickImage(source: ImageSource.gallery);
+  Future<void> _pickImageFromGallery() async {
+    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       final File imageFile = File(pickedFile.path);
       final Uint8List bytes = await imageFile.readAsBytes();
       final ui.Codec codec = await ui.instantiateImageCodec(bytes);
       final ui.FrameInfo frameInfo = await codec.getNextFrame();
       setState(() {
-        _imageFile = imageFile;
-        _originalImage = frameInfo.image;
         _editedImage = frameInfo.image;
-        _resetFilters();
       });
     }
-  }
-
-  void _resetFilters() {
-    setState(() {
-      _brightness = 0.0;
-      _contrast = 0.0;
-      _saturation = 0.0;
-      _exposure = 0.0;
-      _selectedFilter = 'none';
-    });
   }
 
   ui.ColorFilter _getColorFilter() {
     switch (_selectedFilter) {
       case 'grayscale':
-        return const ui.ColorFilter.matrix(<double>[
-          0.2126, 0.7152, 0.0722, 0, 0,
-          0.2126, 0.7152, 0.0722, 0, 0,
-          0.2126, 0.7152, 0.0722, 0, 0,
-          0, 0, 0, 1, 0,
-        ]);
+        return const ui.ColorFilter.matrix(<double>[0.2126,0.7152,0.0722,0,0, 0.2126,0.7152,0.0722,0,0, 0.2126,0.7152,0.0722,0,0, 0,0,0,1,0]);
       case 'sepia':
-        return const ui.ColorFilter.matrix(<double>[
-          0.393, 0.769, 0.189, 0, 0,
-          0.349, 0.686, 0.168, 0, 0,
-          0.272, 0.534, 0.131, 0, 0,
-          0, 0, 0, 1, 0,
-        ]);
+        return const ui.ColorFilter.matrix(<double>[0.393,0.769,0.189,0,0, 0.349,0.686,0.168,0,0, 0.272,0.534,0.131,0,0, 0,0,0,1,0]);
       case 'invert':
-        return const ui.ColorFilter.matrix(<double>[
-          -1, 0, 0, 0, 255,
-          0, -1, 0, 0, 255,
-          0, 0, -1, 0, 255,
-          0, 0, 0, 1, 0,
-        ]);
-      case 'cool':
-        return const ui.ColorFilter.matrix(<double>[
-          1, 0, 0, 0, 0,
-          0, 1, 0, 0, 0,
-          0, 0, 1, 0, 40,
-          0, 0, 0, 1, 0,
-        ]);
-      case 'warm':
-        return const ui.ColorFilter.matrix(<double>[
-          1, 0, 0, 0, 40,
-          0, 1, 0, 0, 0,
-          0, 0, 1, 0, 0,
-          0, 0, 0, 1, 0,
-        ]);
+        return const ui.ColorFilter.matrix(<double>[-1,0,0,0,255, 0,-1,0,0,255, 0,0,-1,0,255, 0,0,0,1,0]);
       default:
         return const ui.ColorFilter.mode(Colors.transparent, BlendMode.src);
     }
   }
 
-  Widget _buildImageView() {
-    if (_editedImage == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return InteractiveViewer(
-      minScale: 0.8,
-      maxScale: 4.0,
-      child: RawImage(
-        image: _editedImage,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-      ),
-    );
-  }
-
   Future<void> _saveImage() async {
     if (_editedImage == null) return;
-
-    if (await Permission.storage.request().isGranted ||
-        await Permission.photos.request().isGranted) {
+    if (await Permission.storage.request().isGranted || await Permission.photos.request().isGranted) {
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      final paint = Paint()..filterQuality = FilterQuality.high;
-      canvas.drawImage(_editedImage!, Offset.zero, paint);
+      canvas.drawImage(_editedImage!, Offset.zero, Paint());
       final picture = recorder.endRecording();
       final img = await picture.toImage(_editedImage!.width, _editedImage!.height);
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       if (byteData != null) {
-        final result = await ImageGallerySaver.saveImage(byteData.buffer.asUint8List());
-        if (result['isSuccess']) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تصویر با موفقیت ذخیره شد.')),
-          );
-        }
+        await ImageGallerySaver.saveImage(byteData.buffer.asUint8List());
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تصویر ذخیره شد')));
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لطفاً دسترسی ذخیره‌سازی را فعال کنید.')),
-      );
     }
   }
 
@@ -193,99 +93,34 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('آتلیه حرفه‌ای'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveImage,
-            tooltip: 'ذخیره در گالری',
-          ),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.save), onPressed: _saveImage)],
       ),
       body: Column(
         children: [
           Expanded(
-            flex: 3,
-            child: Center(
-              child: _buildImageView(),
-            ),
+            child: _editedImage == null
+                ? const Center(child: CircularProgressIndicator())
+                : InteractiveViewer(
+                    child: RawImage(image: _editedImage, fit: BoxFit.contain),
+                  ),
           ),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Color(0xFF2A2A40),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _pickImage,
-                    icon: const Icon(Icons.photo_library),
-                    label: const Text('انتخاب عکس از گالری'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber[800],
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'فیلترهای سینمایی',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildFilterChip('بدون فیلتر', 'none'),
-                      _buildFilterChip('سیاه‌وسفید', 'grayscale'),
-                      _buildFilterChip('سپیا', 'sepia'),
-                      _buildFilterChip('نگاتیو', 'invert'),
-                      _buildFilterChip('سرد', 'cool'),
-                      _buildFilterChip('گرم', 'warm'),
-                    ],
-                  ),
-                  const Divider(height: 32, color: Colors.grey),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildActionButton(
-                        icon: Icons.crop,
-                        label: 'برش',
-                        onTap: () {
-                          // TODO
-                        },
-                      ),
-                      _buildActionButton(
-                        icon: Icons.rotate_left,
-                        label: 'چرخش',
-                        onTap: () {
-                          // TODO
-                        },
-                      ),
-                      _buildActionButton(
-                        icon: Icons.flip,
-                        label: 'آینه',
-                        onTap: () {
-                          // TODO
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                _buildFilterChip('بدون فیلتر', 'none'),
+                _buildFilterChip('سیاه‌وسفید', 'grayscale'),
+                _buildFilterChip('سپیا', 'sepia'),
+                _buildFilterChip('نگاتیو', 'invert'),
+              ],
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _pickImageFromGallery,
+        child: const Icon(Icons.add_photo_alternate),
       ),
     );
   }
@@ -300,28 +135,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         });
       },
       backgroundColor: Colors.grey[800],
-      selectedColor: Colors.amber[700],
-      labelStyle: const TextStyle(color: Colors.white),
-      checkmarkColor: Colors.white,
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return ElevatedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 20),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.grey[800],
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-      ),
+      selectedColor: Colors.amber,
     );
   }
 }
